@@ -1,0 +1,16 @@
+# Render 部署蓝图（备用方案；如用 Render，建议开启付费/非休眠以保持 WebSocket 常驻）
+# 参考: https://render.com/docs/blueprint-spec
+#
+# ⚠️ 重要提醒：Render 免费版会在闲置 15 分钟后把实例休眠，导致 WebSocket 断连。
+#    若你的游戏需要"随时能连"，请优先用 Railway（不强制休眠实例）。
+#    本文件供你在 Render 上测试用。
+services:
+  - type: web
+    name: draw-guess
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    # Render 通过环境变量 PORT 指定端口（server.js 已读取 process.env.PORT）
+    healthCheckPath: /
+    autoDeploy: true

@@ -1,0 +1,17 @@
+{
+  "name": "draw-guess",
+  "version": "1.0.0",
+  "description": "双人你画我猜 · 联机小游戏（WebSocket）",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

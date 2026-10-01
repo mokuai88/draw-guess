@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>你画我猜 · 双人联机</title>
+<style>
+  :root{
+    --bg0:#0f1226; --bg1:#1c2142;
+    --panel:#1e2447; --panel-border:#2f3768;
+    --ink:#eef1ff; --muted:#9aa1c9;
+    --cyan:#5ce1e6; --pink:#ff6b9d; --yellow:#ffd166; --green:#2ecc71;
+    --accent:#6c7cff;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{
+    min-height:100vh;
+    background:radial-gradient(1200px 700px at 20% -10%, rgba(92,225,230,.28) 0, transparent 60%),
+               radial-gradient(1000px 600px at 110% 110%, rgba(124,92,255,.30) 0, transparent 55%),
+               linear-gradient(160deg, var(--bg0), var(--bg1));
+    color:var(--ink);
+    font-family:'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:20px 16px; min-height:100vh;
+  }
+  h1{ font-size:26px; letter-spacing:2px; font-weight:800;
+      background:linear-gradient(90deg,var(--cyan),var(--accent)); -webkit-background-clip:text; background-clip:text; color:transparent;
+      filter:drop-shadow(0 2px 6px rgba(108,124,255,.35)); margin-bottom:2px; }
+  h1 small{ font-size:13px; color:var(--muted); letter-spacing:1px; font-weight:400; -webkit-text-fill-color:var(--muted); }
+  #status{ font-size:13px; color:var(--muted); margin-bottom:14px; }
+  #status .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:4px; }
+  #status.ok .dot{ background:var(--green); box-shadow:0 0 8px var(--green); }
+  #status.bad .dot{ background:#ff4d4d; box-shadow:0 0 8px #ff4d4d; }
+
+  .panel{
+    background:linear-gradient(180deg, var(--panel), #191e3f);
+    border:1px solid var(--panel-border); border-radius:16px; padding:14px 16px;
+    width:100%; max-width:760px; margin-bottom:14px;
+    box-shadow:0 12px 30px rgba(0,0,0,.4);
+  }
+  #joinBox{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  input, select{
+    background:#12162e; color:var(--ink); border:1px solid #2f3768; border-radius:10px;
+    padding:9px 12px; font-size:14px; transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(108,124,255,.18); }
+  button{
+    background:linear-gradient(180deg,var(--accent),#5a67e8); color:#fff; border:none; border-radius:10px;
+    padding:10px 18px; font-size:14px; font-weight:700; cursor:pointer; letter-spacing:.5px;
+    transition:transform .08s, filter .15s, box-shadow .15s;
+    box-shadow:0 6px 16px rgba(108,124,255,.35);
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  }
+  button:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  button:active{ transform:translateY(0) scale(.98); }
+  button:disabled{ background:#2a2e50; color:#69709b; cursor:not-allowed; box-shadow:none; }
+  button.mini{ background:#2a2e50; color:var(--ink); box-shadow:none; padding:8px 12px; font-weight:600; }
+  button.mini:hover:not(:disabled){ background:#363b66; }
+
+  /* ---------- 进行中面板 ---------- */
+  #gamePanel[hidden]{ display:none; }
+
+  #topRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px; }
+  #scores{ display:flex; gap:8px; flex-wrap:wrap; }
+  .scorecard{
+    display:flex; align-items:center; gap:8px; background:#12162e; border:1px solid #2f3768;
+    border-radius:12px; padding:7px 14px; font-size:14px; font-weight:600;
+    transition:border-color .2s;
+  }
+  .scorecard .name{} 
+  .scorecard .num{ font-size:20px; font-weight:800; min-width:22px; text-align:center; display:inline-block; }
+  .scorecard.p0 .num{ color:var(--cyan); }
+  .scorecard.p1 .num{ color:var(--pink); }
+  .scorecard.bump .num{ animation:bump .45s cubic-bezier(.3,1.6,.4,1); }
+  .scorecard.me{ border-color:var(--accent); }
+  @keyframes bump{ 0%{transform:scale(1)} 40%{transform:scale(1.5)} 100%{transform:scale(1)} }
+  .dotp{ display:inline-block; width:10px; height:10px; border-radius:50%; }
+  .dotp.p0{ background:var(--cyan); } .dotp.p1{ background:var(--pink); }
+  .scorecard.me{ box-shadow:0 0 0 2px var(--accent), 0 0 16px rgba(108,124,255,.35); }
+  .scorecard .me-tag{ font-size:10px; color:#0f1226; background:var(--accent); border-radius:6px; padding:1px 6px; font-weight:800; letter-spacing:1px; }
+  .scorecard.me .me-tag{ display:inline-block; }
+  .scorecard .me-tag{ display:none; }
+
+  /* 再来一局按钮 */
+  #btnRestart{
+    background:linear-gradient(180deg,var(--green),#22a15f); box-shadow:0 8px 20px rgba(46,204,113,.4);
+    padding:12px 26px; font-size:16px; margin-top:14px; display:inline-block;
+  }
+
+  /* 移动端优化 */
+  @media (max-width:600px){
+    h1{ font-size:22px; }
+    #joinBox input{ flex:1 1 40%; }
+    #wordShow{ font-size:22px; letter-spacing:8px; padding:7px 16px; }
+    canvas{ border-radius:10px; }
+    #toolbar{ gap:6px; }
+    #toolbar input[type=color]{ width:42px; height:40px; }
+    #toolbar select, #toolbar button{ height:40px; font-size:14px; }
+    #guessLine input{ font-size:16px; }
+    #overlay .big{ font-size:28px; }
+    .tutCard{ padding:20px 16px 14px; }
+  }
+
+  #timer{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .tbar{ width:90px; height:7px; background:#20254a; border-radius:99px; overflow:hidden; }
+  .tfill{ height:100%; background:var(--green); border-radius:99px; transition:width .9s linear, background .4s; }
+  #timer.low .tfill{ background:#ff8f2e; }
+  #timer.crit .tfill{ background:#ff4d4d; }
+
+  #roundInfo{ font-size:12px; color:var(--muted); background:#12162e; border:1px solid #2f3768; border-radius:99px; padding:5px 12px; font-weight:600; }
+
+  /* 身份与题目 */
+  .rolepill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; font-size:14px; font-weight:700; }
+  .rolepill.drawer{ background:rgba(92,225,230,.14); color:var(--cyan); border:1px solid rgba(92,225,230,.4); }
+  .rolepill.guesser{ background:rgba(255,107,157,.14); color:var(--pink); border:1px solid rgba(255,107,157,.4); }
+  #roleLine{ font-size:14px; color:var(--muted); display:flex; align-items:center; gap:8px; margin:6px 0 2px; flex-wrap:wrap; }
+  #wordBox{ text-align:center; margin:8px 0 10px; }
+  #wordTag{ display:inline-block; font-size:14px; color:var(--yellow); letter-spacing:4px; font-weight:700; }
+  #wordShow{
+    display:inline-block; background:#12162e; border:1px dashed var(--yellow); border-radius:12px;
+    padding:8px 28px; font-size:30px; font-weight:800; letter-spacing:12px; color:var(--yellow);
+    text-shadow:0 0 18px rgba(255,209,102,.45); margin-top:4px;
+  }
+  #wordShow.hiddenbox{ letter-spacing:2px; font-size:15px; color:var(--muted); border-color:#2f3768; text-shadow:none; font-weight:600; }
+
+  /* 工具栏 */
+  #toolbar{ display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+  #toolbar label{ font-size:13px; color:var(--muted); }
+  #toolbar input[type=color]{ width:38px; height:36px; padding:2px; border-radius:8px; border:1px solid #2f3768; background:#12162e; cursor:pointer; }
+  #toolbar select{ height:36px; padding:4px 8px; }
+
+  /* 画布 */
+  #wrap{ position:relative; border-radius:14px; overflow:visible; }
+  canvas{
+    background:#fff; border:2px solid #2f3768; border-radius:14px; cursor:crosshair; display:block;
+    box-shadow:0 10px 26px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.05);
+    touch-action:none;   /* 手机绘画时不触发滚动/缩放 */
+  }
+  canvas.locked{ cursor:not-allowed; pointer-events:none; opacity:.94; }
+  canvas.flash{ animation:flash .5s ease-out; }
+  @keyframes flash{ 0%{ box-shadow:0 0 0 4px var(--green), 0 10px 26px rgba(0,0,0,.4);} 100%{ box-shadow:0 10px 26px rgba(0,0,0,.45);} }
+
+  /* 猜词栏 */
+  #guessLine{ display:flex; gap:8px; margin-top:12px; }
+  #guessLine input{ flex:1; font-size:16px; }
+  #guessLine.shake{ animation:shake .4s; }
+  @keyframes shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-5px)} }
+
+  #msgLine{ margin-top:10px; text-align:center; font-size:15px; font-weight:700; min-height:22px; }
+  #msgLine.correct{ color:var(--green); } #msgLine.wrong{ color:#ff8f2e; }
+
+  /* 遮罩 */
+  #overlay{
+    position:absolute; inset:0; background:rgba(9,11,26,.78); backdrop-filter:blur(2px);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:14px; text-align:center; z-index:10;
+  }
+  #overlay[hidden]{ display:none; }
+  #overlay .big{ font-size:34px; font-weight:800; margin-bottom:4px; animation:pop .5s cubic-bezier(.3,1.5,.4,1); }
+  #overlay .big.win{ color:var(--green);} #overlay .big.lose{ color:#ff8f2e;} #overlay .big.draw{ color:var(--yellow);}
+  @keyframes pop{ 0%{ transform:scale(.6); opacity:0;} 100%{ transform:scale(1); opacity:1;} }
+  #overlay .sub{ font-size:14px; color:#c6caef; margin-bottom:8px; max-width:320px; line-height:1.7; }
+  #overlay .ans{ margin-bottom:14px; font-size:18px; letter-spacing:4px; color:var(--yellow); font-weight:700; }
+
+  /* 画布状态横幅：在你该作画时居中醒目提示 */
+  #drawban{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    background:rgba(46,204,113,.16); color:var(--green); border:1px solid rgba(46,204,113,.5);
+    padding:6px 14px; border-radius:99px; font-size:13px; font-weight:700; z-index:5;
+    pointer-events:none; white-space:nowrap; backdrop-filter:blur(2px);
+  }
+  #drawban[hidden]{ display:none; }
+  canvas.locked{ opacity:.72; filter:grayscale(.35); }
+
+  kbd{ background:#2a2e50; color:#cdd3f5; padding:1px 7px; border-radius:6px; border:1px solid #3a4178; font-size:12px; }
+  #hint{ margin-top:6px; font-size:12px; color:#767da8; text-align:center; line-height:1.8; max-width:760px; }
+
+  /* ---------- 玩法说明弹窗 ---------- */
+  #helpBtn{ background:none; border:1px solid #3a4178; color:var(--muted); width:36px; height:36px;
+            border-radius:50%; font-size:17px; padding:0; margin-left:auto; box-shadow:none; }
+  #helpBtn:hover{ border-color:var(--accent); color:var(--ink); }
+  #tutorial{
+    position:fixed; inset:0; background:rgba(8,10,26,.82); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;
+  }
+  #tutorial[hidden]{ display:none; }
+  .tutCard{
+    background:linear-gradient(180deg,#232a52,#191e3f); border:1px solid #3a4178; border-radius:18px;
+    max-width:560px; width:100%; max-height:90vh; overflow:auto; padding:26px 26px 20px;
+    box-shadow:0 24px 60px rgba(0,0,0,.55); animation:pop .35s cubic-bezier(.3,1.4,.4,1);
+  }
+  .tutCard h2{ font-size:22px; margin-bottom:4px; letter-spacing:1px;
+    background:linear-gradient(90deg,var(--cyan),var(--accent)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .tutCard .sub{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .tutSec{ background:#161b38; border:1px solid #2f3768; border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+  .tutSec h3{ font-size:14px; margin-bottom:8px; color:var(--ink); }
+  .tutRow{ display:flex; gap:8px; align-items:flex-start; padding:4px 0; font-size:13.5px; color:#c6caef; line-height:1.6; }
+  .tutRow .ico{ font-size:16px; width:20px; text-align:center; flex:none; }
+  .tutRow b{ color:var(--cyan); } .tutRow .pink{ color:var(--pink); }
+  .tag{ display:inline-block; padding:1px 8px; border-radius:6px; font-size:12px; font-weight:700; margin-right:6px; }
+  .tag.drawer{ background:rgba(92,225,230,.15); color:var(--cyan); border:1px solid rgba(92,225,230,.35); }
+  .tag.guesser{ background:rgba(255,107,157,.15); color:var(--pink); border:1px solid rgba(255,107,157,.35); }
+  .tutCard .actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+  .tutCard .start{ background:linear-gradient(180deg,var(--green),#22a15f); box-shadow:0 6px 16px rgba(46,204,113,.35); padding:12px 26px; font-size:15px; }
+</style>
+</head>
+<body>
+
+<h1>你画我猜 <small>· 双人联机</small></h1>
+<div id="status" class="ok">连接中…<span class="dot"></span></div>
+
+<div class="panel" id="joinBox">
+  <input id="nameInput" placeholder="你的昵称" value="玩家" style="width:108px;">
+  <input id="roomInput" placeholder="房间号" value="room1" style="width:132px;">
+  <button id="btnJoin">加入 / 开局</button>
+  <button id="helpBtn" title="玩法说明">❔</button>
+  <span id="roomInfo" style="font-size:13px;color:var(--muted);"></span>
+</div>
+
+<div class="panel" id="gamePanel" hidden>
+  <div id="topRow">
+    <div id="scores">
+      <div class="scorecard p0"><span class="dotp p0"></span><span class="name" id="name0">蓝方</span><span class="me-tag">你</span><span class="num" id="score0">0</span></div>
+      <div class="scorecard p1"><span class="dotp p1"></span><span class="name" id="name1">红方</span><span class="me-tag">你</span><span class="num" id="score1">0</span></div>
+    </div>
+    <div id="timer"><span id="timerTxt">–</span><div class="tbar"><div class="tfill" id="tfill" style="width:0%"></div></div></div>
+    <div id="roundInfo">回合 0 / 5</div>
+  </div>
+
+  <div id="roleLine">等待开始…</div>
+  <div id="wordBox">
+    <div id="wordTag"></div><br>
+    <div id="wordShow" class="hiddenbox">…</div>
+  </div>
+
+  <div id="toolbar">
+    <label>颜色</label>
+    <input type="color" id="color" value="#000000">
+    <label>粗细</label>
+    <select id="width"><option>2</option><option>4</option><option selected>6</option><option>10</option><option>16</option></select>
+    <button id="btnClear" class="mini">清空画布</button>
+  </div>
+
+  <div id="wrap">
+    <canvas id="cv" width="700" height="440"></canvas>
+    <div id="drawban" hidden>✍️ 现在轮到你作画</div>
+    <div id="overlay" hidden>
+      <div class="big" id="ovText">准备</div>
+      <div class="sub" id="ovSub">…</div>
+      <div class="ans" id="ovAns" hidden></div>
+      <button id="btnRestart" hidden>🔄 再来一局</button>
+    </div>
+  </div>
+
+  <div id="guessLine">
+    <input id="guessInput" placeholder="🔍  在这里输入你的答案，回车提交" disabled autocomplete="off">
+    <button id="btnGuess" disabled>猜！</button>
+  </div>
+  <div id="msgLine"></div>
+</div>
+
+<!-- 玩法说明弹窗 -->
+<div id="tutorial" hidden>
+  <div class="tutCard">
+    <h2>🎨 你画我猜 · 怎么玩</h2>
+    <div class="sub">双人联机小游戏 · 一人画画、一人猜词，轮流来</div>
+
+    <div class="tutSec">
+      <h3>🚀 开始对局</h3>
+      <div class="tutRow"><span class="ico">📍</span><span>你和朋友打开同一个网页，输入<b>相同的房间号</b>，各自点「加入 / 开局」，凑齐 2 人即自动开赛。</span></div>
+      <div class="tutRow"><span class="ico">🌐</span><span>哪怕你们不在同一个 Wi-Fi（如手机流量、公司网络）也能连——只要都点进这个页面。</span></div>
+    </div>
+
+    <div class="tutSec">
+      <h3>🎲 一轮是这样进行的</h3>
+      <div class="tutRow">
+        <span class="ico">🎨</span>
+        <span><span class="tag drawer">画者</span>会收到一个秘密词，在<b>下方白板上画出它的样子</b>，但<b>不能写字/说话泄题</b>。</span>
+      </div>
+      <div class="tutRow">
+        <span class="ico">🔍</span>
+        <span><span class="tag guesser">猜者</span>看着对方画的图，在输入框<b>输入词</b>（回车或点「猜！」提交）。</span>
+      </div>
+      <div class="tutRow"><span class="ico">✅</span><span>猜对 → 猜者 <b>+1 分</b>，立刻交换角色进入下一轮。</span></div>
+      <div class="tutRow"><span class="ico">⏱️</span><span>每轮限 <b>45 秒</b>，超时自动揭晓答案并换人。</span></div>
+      <div class="tutRow"><span class="ico">🏆</span><span>共 <b>5 回合</b>，结束时得分高者获胜！</span></div>
+    </div>
+
+    <div class="tutSec">
+      <h3>🖱️ 操作小提示</h3>
+      <div class="tutRow"><span class="ico">🎨</span><span>画者：鼠标<b>按住拖动</b>画画，可用顶部调<b>颜色</b>、<b>粗细</b>、「清空画布」重来。</span></div>
+      <div class="tutRow"><span class="ico">🔍</span><span>猜者：画布是<b>锁定</b>的，别担心画不了——你负责猜就对了。</span></div>
+      <div class="tutRow"><span class="ico">📱</span><span>手机也能玩：直接<b>手指画</b>来作画。</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="start" id="tutOk">我明白了，开始！</button>
+    </div>
+  </div>
+</div>
+
+<div id="hint">
+  🤝 两人输入<b>相同房间号</b>即可开打 · 每回合一人画、一人猜，轮流来 · 猜对换人 · 5 回合定胜负。<br>
+  <span style="opacity:.7">电脑用鼠标画，手机用手指画；工具栏可调颜色和粗细。</span>
+</div>
+
+<script>
+"use strict";
+// ========== 画布与画笔 ==========
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+let pen={down:false,x:0,y:0,color:'#000000',width:6};
+let iAmDrawer=false, strokeBuffer=[];
+
+function pos(e){const r=cv.getBoundingClientRect();
+  // 保护：若画布尚未布局(r.width/r.height 为 0)，用画布逻辑尺寸兜底，避免坐标算成 Infinity/NaN
+  const cw=r.width||cv.width, ch=r.height||cv.height;
+  const cx = (e.clientX!=null?e.clientX:e.touches&&e.touches[0].clientX);
+  const cy = (e.clientY!=null?e.clientY:e.touches&&e.touches[0].clientY);
+  return{ x:(cx-r.left)*cv.width/cw, y:(cy-r.top)*cv.height/ch };}
+
+// 指针坐标抽象：鼠标 + 触摸统一。桌面走 mouse 事件，手机走 touch 事件（最稳妥，互不干扰）
+function penDownX(e){
+  if(!iAmDrawer)return;
+  const p=pos(e); pen.down=true; pen.x=p.x; pen.y=p.y;
+  strokeBuffer=[{...p,color:pen.color,width:pen.width}];
+}
+function penMoveX(e){
+  if(!pen.down||!iAmDrawer)return;
+  const p=pos(e);
+  ctx.strokeStyle=pen.color;ctx.lineWidth=pen.width;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(pen.x,pen.y);ctx.lineTo(p.x,p.y);ctx.stroke();
+  strokeBuffer.push({...p,color:pen.color,width:pen.width});
+  sendStrokeThrottled(strokeBuffer.slice());
+  pen.x=p.x;pen.y=p.y;
+}
+function penUpX(){ pen.down=false; strokeBuffer=[]; }
+function firstPt(e){ return (e.touches&&e.touches.length)?e.touches[0] : e.changedTouches&&e.changedTouches.length?e.changedTouches[0] : e; }
+
+cv.addEventListener('mousedown',e=>penDownX(e));
+cv.addEventListener('mousemove',e=>penMoveX(e));
+window.addEventListener('mouseup',penUpX);
+cv.addEventListener('touchstart',e=>{e.preventDefault();penDownX(firstPt(e));},{passive:false});
+cv.addEventListener('touchmove',e=>{e.preventDefault();penMoveX(firstPt(e));},{passive:false});
+cv.addEventListener('touchend',e=>{e.preventDefault();penUpX();},{passive:false});
+function sendStroke(points){if(iAmDrawer)ws.send(JSON.stringify({type:'stroke',data:points}));}
+// 节流：每 40ms 最多发一次，避免公网高延迟下堆积卡顿
+let lastSent=0;
+function sendStrokeThrottled(points){
+  if(!iAmDrawer)return;
+  const now=Date.now();
+  if(now-lastSent>=40){ lastSent=now; sendStroke(points); }
+}
+function replay(points){if(!points||points.length<2)return;ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
+  for(let i=1;i<points.length;i++){ctx.strokeStyle=points[i].color;ctx.lineWidth=points[i].width;
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.lineTo(points[i].x,points[i].y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(points[i].x,points[i].y);}}
+function clearCanvas(){ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);}
+
+document.getElementById('btnClear').onclick=clearCanvas;
+document.getElementById('color').oninput=e=>pen.color=e.target.value;
+document.getElementById('width').onchange=e=>pen.width=Number(e.target.value);
+
+// ========== 连接与状态 ==========
+const $=id=>document.getElementById(id);
+const ws=(()=>{const p=location.protocol==='https:'?'wss://':'ws://';return new WebSocket(p+location.host);})();
+let myName='玩家',myIdx=0,scores=[0,0],roundCount=0,maxRounds=5;
+
+function setStatus(ok,text){const s=$('status');s.className=ok?'ok':'bad';s.textContent=text;
+  s.innerHTML=text+'<span class="dot"></span>';}
+function setMsg(text,cls){const m=$('msgLine');m.textContent=text;m.className=cls||'';}
+
+// 显示身份角色
+function showRole(drawer, word){
+  iAmDrawer=drawer; cv.classList.toggle('locked',!drawer);
+  $('overlay').hidden=true;   // 出好题开始游戏，必须隐藏全屏遮罩，否则会挡住画布鼠标事件
+  // 画布横幅：是你作画时显示"现在轮到你作画"，否则隐藏（猜者/等待）
+  $('drawban').hidden = !drawer;
+  $('roleLine').innerHTML = '<span class="rolepill '+(drawer?'drawer':'guesser')+'">'+
+    (drawer?'🎨 你这一回合是画者':'🔍 你这一回合是猜者')+'</span>';
+  $('wordShow').className = 'wordShow' + (drawer?'':' hiddenbox');
+  $('wordShow').textContent = drawer ? (word||'') : '【你是猜的人】看画猜词吧';
+  $('wordTag').textContent = drawer ? '请画出下面这个词，动作快点!' : '正在等对方画，画布暂不可画';
+  $('guessInput').disabled=drawer?true:false; $('btnGuess').disabled=drawer?true:false;
+  if(!drawer){
+    // 猜者：画布不可画，明确提示
+    setMsg('画布已锁定，你负责猜词。');
+  } else {
+    setMsg('');
+  }
+  if(!drawer)$('guessInput').focus();
+  resetTimer(RUNNING_SECONDS);
+}
+function showOverlay(title, cls, sub, ans){
+  const o=$('overlay');
+  $('ovText').textContent=title; $('ovText').className='big '+(cls||'');
+  $('ovSub').textContent=sub||'';
+  if(ans){$('ovAns').hidden=false;$('ovAns').textContent='答案是：'+ans;}
+  else $('ovAns').hidden=true;
+  o.hidden=false;
+}
+function bumpScore(idx){
+  $(['score0','score1'][idx]).closest('.scorecard').classList.remove('bump');
+  void $(['score0','score1'][idx]).closest('.scorecard').offsetWidth;
+  $(['score0','score1'][idx]).closest('.scorecard').classList.add('bump');
+}
+
+ws.onclose=()=>setStatus(false,'连接已断开');
+ws.onerror=()=>setStatus(false,'连接出错');
+
+ws.onmessage=e=>{
+  let m;try{m=JSON.parse(e.data);}catch{return;}
+  if(m.type==='info'){
+    $('roomInfo').innerHTML = `子房间号 <b style="color:var(--yellow)">${m.room}</b> · 在线 <b>${m.count}</b> 人`;
+    if(Array.isArray(m.names) && myIdx!=null){
+      const o = m.names[1-myIdx] || '对方';
+      const me = m.names[myIdx] || '你';
+      $('name0').textContent = myIdx===0? me : o;
+      $('name1').textContent = myIdx===0? o : me;
+    }
+  }
+  else if(m.type==='you'){ myIdx=m.idx;
+    $('name0').textContent = myIdx===0?'你':'对方';
+    $('name1').textContent = myIdx===0?'对方':'你';
+    const sc=document.querySelectorAll('.scorecard');
+    sc[0].classList.toggle('me', myIdx===0);
+    sc[1].classList.toggle('me', myIdx===1);
+  }
+  else if(m.type==='waiting'){ setMsg('已加入房间，等待好友加入… 把页面的房间号告诉 TA');
+    iAmDrawer=false; cv.classList.add('locked'); $('drawban').hidden=true; }
+  else if(m.type==='full'){ setMsg('房间已满（仅支持 2 人）'); }
+  else if(m.type==='peerLeft'){ setMsg('好友已离开，游戏暂停'); showOverlay('等待对手','draw','好友离开或刷新，等 TA 重新加入'); clearCanvas();
+    iAmDrawer=false; cv.classList.add('locked'); $('drawban').hidden=true; }
+  else if(m.type==='wrong'){ setMsg('不太对哦，再想想～','wrong'); const gl=$('guessLine'); gl.classList.remove('shake'); void gl.offsetWidth; gl.classList.add('shake'); }
+  else if(m.type==='stroke'){ replay(m.data); }
+  else if(m.type==='start'){
+    scores=m.scores.slice(); renderScores(); roundCount=m.round; maxRounds=m.maxRounds;
+    $('roundInfo').textContent=`回合 ${roundCount} / ${maxRounds}`; $('gamePanel').hidden=false; clearCanvas();
+    iAmDrawer=false; cv.classList.add('locked'); $('drawban').hidden=true; $('btnRestart').hidden=true;
+    showOverlay('游戏开始!','draw','等待服务器出题…');
+  }
+  else if(m.type==='newRound'){
+    scores=m.scores.slice(); renderScores(); roundCount=m.round; maxRounds=m.maxRounds;
+    $('roundInfo').textContent=`回合 ${roundCount} / ${maxRounds}`; $('gamePanel').hidden=false; clearCanvas();
+    $('btnRestart').hidden=true;
+    setMsg('');
+    // 新回合角色未定前先锁定，避免间隙误画
+    iAmDrawer=false; cv.classList.add('locked'); $('drawban').hidden=true;
+  }
+  else if(m.type==='role'){ showRole(m.you==='drawer', m.word); }
+  else if(m.type==='result'){
+    resetTimer(0);
+    renderScores();
+    if(m.correct){ const scorer = iAmDrawer ? (1-myIdx) : myIdx; // 得分者是"猜者"
+      bumpScore(scorer); cv.classList.remove('flash'); void cv.offsetWidth; cv.classList.add('flash');
+      showOverlay('答对了! +1分','win','', m.answer); }
+    else { showOverlay('时间到','lose','这回合没猜出来，答案揭晓', m.answer); }
+  }
+  else if(m.type==='gameover'){
+    resetTimer(0);
+    let cls='draw',t='平局!';
+    if(m.winnerIndex===myIdx){cls='win';t='🎉 你赢啦!';}
+    else if(m.winnerIndex===1-myIdx){cls='lose';t='对方赢了';}
+    const nm = myIdx!=null ? `你 ${scores[myIdx]} : ${scores[1-myIdx]} 对方` : `比分 ${scores[0]} : ${scores[1]}`;
+    showOverlay(t,cls,nm);
+    $('btnRestart').hidden=false;   // 显示"再来一局"
+  }
+};
+function renderScores(){ $('score0').textContent=scores[0]; $('score1').textContent=scores[1]; }
+
+// ========== 倒计时进度条 ==========
+let RUNNING_SECONDS=45,timerLeft=0,timerInterval=null;
+function resetTimer(sec){
+  timerLeft=sec; const tf=$('tfill'), tt=$('timerTxt');
+  clearInterval(timerInterval);
+  if(sec<=0){ tf.style.width='0%'; tt.textContent='–'; $('timer').className='timer'; return; }
+  tf.style.width='100%';
+  timerInterval=setInterval(()=>{
+    timerLeft--;
+    const pct=Math.max(0,(timerLeft/RUNNING_SECONDS)*100);
+    tf.style.width=pct+'%';
+    tt.textContent=`⏱ ${Math.max(0,timerLeft)}s`;
+    const t=$('timer');
+    t.className='timer'+(pct<30?' crit':pct<55?' low':'');
+    if(timerLeft<=0)clearInterval(timerInterval);
+  },1000);
+}
+
+// ========== 加入房间 ==========
+let joinedRoom=null;
+function doJoin(room){
+  myName=$('nameInput').value.trim()||'玩家';
+  room = (room||$('roomInput').value.trim()||'room1');
+  joinedRoom = room;
+  try{ localStorage.setItem('dg_name', myName); }catch(_){}
+  ws.send(JSON.stringify({type:'join',room,name:myName}));
+  $('roomInfo').innerHTML = `子房间号 <b style="color:var(--yellow)">${room}</b>`;
+  setMsg('');
+}
+$('btnJoin').onclick=()=>doJoin();
+// 记住上次填的昵称，省得每次重输
+try{ const saved=localStorage.getItem('dg_name'); if(saved) $('nameInput').value=saved; }catch(_){}
+// 页面一加载就自动加入默认房间，省去"手动点加入"这个易被忽略的步骤，
+// 两人打开同一个地址即自动进入同一房间等待，最稳。
+ws.onopen=()=>{ setStatus(true,'已连接服务器'); doJoin(); };
+function ensureJoined(){ if(!joinedRoom) doJoin(); }
+$('guessInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitGuess();});
+$('btnGuess').onclick=submitGuess;
+function submitGuess(){const v=$('guessInput').value.trim();if(!v)return;
+  ws.send(JSON.stringify({type:'guess',text:v}));$('guessInput').value='';$('guessInput').focus();}
+$('btnRestart').onclick=()=>{
+  ws.send(JSON.stringify({type:'restart'}));
+  $('btnRestart').hidden=true; setMsg('正在重新开一局…');
+};
+
+// ========== 玩法说明弹窗 ==========
+function showTutorial(){ $('tutorial').hidden=false; }
+function hideTutorial(){ $('tutorial').hidden=true; }
+$('helpBtn').onclick = ()=> $('tutorial').hidden ? showTutorial() : hideTutorial();
+$('tutOk').onclick  = hideTutorial;
+// 首次打开自动弹出一次（用 localStorage 记录；不可用时也照常自动弹出）
+try{
+  if(!localStorage.getItem('dg_tut_shown')){ showTutorial(); localStorage.setItem('dg_tut_shown','1'); }
+}catch(_){ showTutorial(); }   // localStorage 不可用(隐私模式等)时也弹出
+</script>
+</body>
+</html>

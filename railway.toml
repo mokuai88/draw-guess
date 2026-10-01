@@ -1,0 +1,12 @@
+# Railway 部署配置（可选的，若不提供会自动用 npm start）
+# 参考: https://docs.railway.com/
+
+[build]
+  builder = "NIXPACKS"          # Railway 自动识别 Node 项目、安装依赖
+  buildCommand = "npm install"
+
+[deploy]
+  startCommand = "npm start"    # 启动我们常驻的 WebSocket 服务器
+  # 不设 restarts 上限；Railway 会用它的保活机制维持服务
+  healthcheckPath = ""          # 我们的游戏不强制要求健康检查路径
+  healthcheckTimeout = 60
